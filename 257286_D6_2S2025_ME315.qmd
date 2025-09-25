@@ -1,0 +1,207 @@
+---
+title: "Desafio 06"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: False
+#| message: False
+#| warning: False
+
+# Pacotes necessários
+library(DBI)        # Carrega o pacote DBI, que define uma interface genérica para comunicação com bancos de dados no R.
+library(RSQLite)    # Carrega o pacote RSQLite, que implementa a interface DBI especificamente para bancos de dados SQLite.
+library(dplyr)      # Carrega o pacote dplyr, usado para manipulação e transformação de dados de forma eficiente e legível.
+```
+
+
+1.Baixe o arquivo disco.db e armazene na variável path o caminho completo (pasta) na qual o arquivo foi gravado. Utilize o comando file.path() para combinar a variável path com o nome do arquivo (disco.db) e obter o nome do arquivo com seu respectivo caminho. Armazene este resultado na variável fname. 
+`Obs.`: Por mais que no Lab06 pede o caminho absoluto - que é o caminho completo - para o arquivo, no desafio é pedido o caminho relativo
+
+```{r}
+path  <- "."   # Define o caminho relativo como a pasta atual (".").
+fname <- file.path(path, "disco.db") # Combina o caminho definido em 'path' com o nome do arquivo "disco.db",
+# criando o caminho completo para o arquivo do banco de dados.
+# Se 'path' for ".", 'fname' será "./disco.db".
+# file.exists(fname)  # verifica se está rodando corretamente 
+```
+
+2.Utilizando o pacote RSQLite, conecte-se ao arquivo de banco de dados. Armazene a conexão na variável conn.
+```{r}
+conn <- dbConnect(RSQLite::SQLite(), fname)
+# Cria uma conexão com o banco de dados SQLite armazenado no arquivo 'fname'.
+# 'conn' é o objeto que representa a conexão ativa, usado em todas as consultas.
+```
+
+3. Liste as tabelas existentes no banco de dados. 
+```{r}
+tabelas <- dbListTables(conn) # Lista todas as tabelas disponíveis no banco de dados conectado.
+# O resultado é um vetor de nomes de tabelas.
+tabelas  # Exibe na tela o vetor com os nomes das tabelas.
+```
+`Resposta:` Neste banco de dados temos as seguintes tabelas: `r paste(tabelas, collapse = ", ")`, totalizando `r length(tabelas)` tabelas.
+
+
+4. Identifique os nomes de todas as colunas existentes na tabela customers.
+```{r}
+colunas_customers <- dbListFields(conn, "customers")
+# Retorna os nomes de todas as colunas da tabela 'customers'.
+# O resultado é um vetor de strings com os nomes das colunas.
+```
+`Resposta:` A tabela customers possui as seguintes colunas: `r paste(colunas_customers, collapse = ", ")`, totalizando `r length(colunas_customers)` colunas.
+
+5. Utilizando apenas SQLite, com o apoio do comando dbGetQuery, identifique quantos clientes estão atualmente cadastrados neste banco de dados.
+```{r}
+total_clientes <- dbGetQuery(conn, "SELECT COUNT(*) AS n FROM customers")$n
+# Executa a consulta SQL que conta o número total de clientes na tabela 'customers'.
+# 'dbGetQuery' envia a consulta para o banco e retorna os resultados em um data frame.
+# O '$n' extrai diretamente o valor da contagem como número.
+```
+`Resposta:` O banco de dados possui atualmente `r total_clientes` clientes cadastrados.
+
+6. Utilizando apenas SQLite, identifique o número de países diferentes em que moram os clientes encontrados acima.
+```{r}
+total_paises <- dbGetQuery(conn, "SELECT COUNT(DISTINCT Country) AS n FROM customers")$n
+# Executa a consulta SQL que conta quantos países distintos existem na coluna 'Country' da tabela 'customers'.
+# O '$n' extrai o valor diretamente da coluna 'n' do data frame retornado.
+```
+`Resposta:` Os clientes estão distribuídos em `r total_paises` países diferentes.
+
+7. Utilizando apenas SQLite, quantos clientes existem por país? A tabela resultante deve conter o nome do país e a respectiva contagem, além de ser ordenada de maneira decrescente pela referida contagem.
+```{r}
+dbGetQuery(conn, "
+  SELECT Country, COUNT(*) AS total_clientes
+  FROM customers
+  GROUP BY Country
+  ORDER BY total_clientes DESC
+")
+# Consulta SQL:
+# - Seleciona o país e a contagem de clientes em cada país.
+# - 'GROUP BY Country' agrupa os registros por país.
+# - 'ORDER BY total_clientes DESC' ordena do maior para o menor número de clientes.
+# O resultado é uma tabela com dois campos: país e número de clientes.
+```
+
+8. Quais são os 5 países com mais clientes registrados? Use apenas SQLite.
+```{r}
+top5_paises <- dbGetQuery(conn, "
+  SELECT Country, COUNT(*) AS total_clientes
+  FROM customers
+  GROUP BY Country
+  ORDER BY total_clientes DESC
+  LIMIT 5
+")
+# Consulta SQL:
+# - Igual à anterior, mas com 'LIMIT 5' para mostrar apenas os 5 primeiros países.
+# O resultado é armazenado em 'top5_paises'.
+```
+`Respostas:` Os 5 países com mais clientes registrados são: `r toString(top5_paises$Country)` com quantidades `r toString(top5_paises$total_clientes)`, respectivamente.
+
+9. Quais são os países registrados que possuem apenas 6 letras no nome?
+```{r}
+paises <- dbGetQuery(conn, "
+  SELECT DISTINCT Country
+  FROM customers
+  WHERE LENGTH(Country) = 6
+")
+# Consulta SQL:
+# - Seleciona os nomes dos países distintos da tabela 'customers'.
+# - Usa a função LENGTH() para filtrar apenas aqueles com 6 caracteres.
+# O resultado é uma lista de países com nomes de 6 letras.
+```
+`Resposta:` Os países que possuem exatamente 6 letras no nome são: `r toString(paises$Country)`.
+
+10. Quais foram as músicas compradas por clientes brasileiros?
+```{r}
+musicas_br <- dbGetQuery(conn, "
+  SELECT DISTINCT t.Name AS Musica
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  WHERE c.Country = 'Brazil'
+  ORDER BY t.Name
+")
+musicas_br
+# Consulta SQL:
+# - Relaciona clientes → faturas → itens da fatura → faixas de música.
+# - Seleciona apenas os clientes cujo 'Country' é 'Brazil'.
+# - Retorna os nomes distintos das músicas compradas.
+# - 'ORDER BY t.Name' ordena os resultados em ordem alfabética.
+```
+
+- Qual o álbum mais tocado por país?
+```{r}
+# Álbum mais tocado por país
+sql_album_por_pais <- "
+WITH album_country_counts AS (
+  SELECT c.Country,
+         al.AlbumId,
+         al.Title AS Album,
+         COUNT(*) AS total
+  FROM customers c
+  JOIN invoices i      ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t         ON ii.TrackId = t.TrackId
+  JOIN albums al        ON t.AlbumId = al.AlbumId
+  GROUP BY c.Country, al.AlbumId, al.Title
+)
+SELECT acc.Country, acc.Album, acc.total
+FROM album_country_counts acc
+JOIN (
+  SELECT Country, MAX(total) AS max_total
+  FROM album_country_counts
+  GROUP BY Country
+) m ON acc.Country = m.Country AND acc.total = m.max_total
+ORDER BY acc.Country;
+"
+dbGetQuery(conn, sql_album_por_pais)
+# Consulta SQL:
+# - Usa um CTE (WITH) para contar quantas vezes cada álbum foi comprado em cada país.
+# - Em seguida, seleciona apenas o álbum com maior contagem por país.
+# - 'ORDER BY acc.Country' organiza os resultados em ordem alfabética de país.
+```
+
+- Qual o artista mais tocado por país?
+```{r}
+# Artista mais tocado por país 
+sql_artista_por_pais <- "
+WITH artist_country_counts AS (
+  SELECT c.Country,
+         ar.ArtistId,
+         ar.Name AS Artist,
+         COUNT(*) AS total
+  FROM customers c
+  JOIN invoices i      ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t         ON ii.TrackId = t.TrackId
+  JOIN albums al        ON t.AlbumId = al.AlbumId
+  JOIN artists ar       ON al.ArtistId = ar.ArtistId
+  GROUP BY c.Country, ar.ArtistId, ar.Name
+)
+SELECT acc.Country, acc.Artist, acc.total
+FROM artist_country_counts acc
+JOIN (
+  SELECT Country, MAX(total) AS max_total
+  FROM artist_country_counts
+  GROUP BY Country
+) m ON acc.Country = m.Country AND acc.total = m.max_total
+ORDER BY acc.Country;
+"
+dbGetQuery(conn, sql_artista_por_pais)
+# Consulta SQL:
+# - Parecida com a anterior, mas agora conta quantas vezes cada artista foi ouvido em cada país.
+# - Retorna apenas o artista mais tocado por país.
+```
+
+
+11. Desconecte do banco de dados.
+```{r}
+dbDisconnect(conn)
+# Encerra a conexão com o banco de dados, liberando os recursos.
+# É uma boa prática sempre fechar a conexão ao final do uso.
+```
+
+

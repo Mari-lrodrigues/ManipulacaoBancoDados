@@ -1,0 +1,268 @@
+---
+title: "Desafio 07"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: FALSE
+#| message: FALSE
+#| warning: FALSE
+library(RSQLite) # permite conectar e manipular bancos de dados SQLite.
+library(tidyverse) # coleção de pacotes úteis (como dplyr, ggplot2, etc.).
+library(dbplyr) # integra SQL com dplyr, permitindo consultas usando sintaxe R.
+```
+
+Slide 2
+```{r}
+if(!"/discoCopy.db" %in% list.files("./dados/")){
+file.copy("dados/disco.db","dados/discoCopy.db")
+} # Modificaremos esse arquivo
+# Verifica se o arquivo discoCopy2.db existe na pasta dados/.
+# Se não existir, copia o arquivo original disco.db e cria uma cópia chamada discoCopy2.db.
+# Essa cópia será usada para modificações, preservando o original.
+
+db <- dbConnect(SQLite(),
+"./dados/discoCopy.db")
+# Abre a conexão com o banco discoCopy2.db.
+# O objeto db é usado em todos os comandos seguintes.
+
+```
+
+slide 4
+```{r}
+dbListTables(db)
+# Lista todas as tabelas existentes no banco conectado.
+```
+
+```{r}
+dbExecute(db, "CREATE TABLE instruments
+          (AlbumId INTEGER, 
+          TrackId INTEGER, 
+          ElectricGuitar INTEGER, 
+          Singer INTEGER, 
+          Trumpet INTEGER)")
+# Cria uma nova tabela chamada instruments com as colunas definidas.
+# dbExecute() executa comandos SQL que não retornam dados (ex.: CREATE, DROP, INSERT).
+```
+
+slide 5
+```{r}
+dbListFields(db, 'instruments')
+# Lista os nomes das colunas da tabela instruments.
+```
+
+```{r}
+dbExecute(db, "DROP TABLE instruments")
+# Remove a tabela instruments do banco.
+```
+
+```{r}
+dbListTables(db)
+# Lista novamente as tabelas para confirmar que instruments foi apagada.
+```
+
+slide 6
+```{r}
+aname = "Gilberto Gil"
+sql = paste0("SELECT ArtistId FROM artists ", 
+             "WHERE Name = '", aname, "'")
+aId = dbGetQuery(db, sql)
+sql = paste('SELECT Title FROM albums', 
+            'WHERE ArtistId =', aId)
+dbGetQuery(db, sql)
+# Cria uma consulta SQL para buscar o ArtistId do artista "Gilberto Gil".
+# dbGetQuery() roda a query e guarda o resultado em aId.
+# Monta uma nova query para pegar os álbuns que pertencem ao ArtistId encontrado.
+# Retorna os títulos desses álbuns.
+```
+
+slide 7
+```{r}
+sql = paste("SELECT ArtistId FROM artists", 
+            "WHERE Name = ?")
+query <- dbSendQuery(db, sql)
+dbBind(query, list("Gilberto Gil"))
+aId <- dbFetch(query)
+dbClearResult(query)
+# Segundo passo interno, não deve causar problema
+sql = paste('SELECT Title FROM albums', 
+            'WHERE ArtistId =', aId)
+dbGetQuery(db, sql)
+# Cria uma consulta SQL com parâmetro ?.
+# dbSendQuery() envia a query para o banco.
+# dbBind() insere o valor "Gilberto Gil" no parâmetro.
+# dbFetch() pega o resultado (o ArtistId).
+# dbClearResult() libera a memória da consulta.
+# Usa o ArtistId obtido para listar os álbuns do artista.
+```
+
+slide 8
+```{r}
+# Criando a tabela instruments
+dbExecute(db, "
+  CREATE TABLE IF NOT EXISTS instruments (
+    AlbumId INTEGER,
+    TrackId INTEGER,
+    ElectricGuitar TEXT,
+    Singer TEXT,
+    Trumpet TEXT
+  )
+")
+# Cria a tabela instruments novamente (agora com tipos TEXT nas colunas).
+# IF NOT EXISTS garante que não dá erro se a tabela já existir.
+```
+
+```{r}
+dbListFields(db, 'instruments')
+# Lista as colunas da tabela.
+```
+
+```{r}
+# Eu Tu Eles: AlbumId 85,
+sql = paste('SELECT TrackId, Name FROM tracks', 
+            'WHERE AlbumId = 85')
+dbGetQuery(db, sql) %>% head
+# Consulta o TrackId e o nome das músicas do álbum de AlbumId = 85.
+# head mostra apenas as primeiras linhas do resultado.
+```
+
+slide 9
+```{r}
+dbExecute(db, "INSERT INTO instruments 
+          VALUES ('85', '1075', 0, 1, 0), 
+          ('85', '1078', 0, 1, 0); ")
+```
+```{r}
+dbGetQuery(db, "SELECT * FROM instruments")
+# Exibe todo o conteúdo da tabela instruments.
+```
+
+slide 10
+```{r}
+dbWriteTable(db, "mtcars", mtcars)
+dbListTables(db)
+# Escreve o dataset mtcars (que já existe no R) dentro do banco.
+# Lista novamente as tabelas para confirmar a criação.
+```
+
+```{r}
+dbGetQuery(db, "SELECT * FROM mtcars") %>% head(3)
+#Consulta a tabela mtcars no banco e mostra as 3 primeiras linhas.
+```
+
+slide11
+```{r}
+theAvgCar <- mtcars %>%
+  summarise_all(function(x) round(mean(x), 2))
+theAvgCar
+# Calcula a média de cada coluna de mtcars e arredonda para 2 casas.
+```
+
+```{r}
+dbWriteTable(db, "mtcars", theAvgCar, append = TRUE)
+dbGetQuery(db, "SELECT * FROM mtcars") %>% tail(3)
+# Escreve theAvgCar no final da tabela existente (append = TRUE).
+# Mostra as 3 últimas linhas da tabela mtcars no banco.
+```
+
+slide 12
+```{r}
+dbWriteTable(db, "mtcars", mtcars, overwrite = TRUE)
+dbGetQuery(db, "SELECT * FROM mtcars") %>% tail(3)
+# Substitui a tabela mtcars do banco pelo dataset original.
+# Mostra as 3 últimas linhas.
+```
+
+slide 13
+```{r}
+res <- dbSendQuery(db, "SELECT * FROM mtcars WHERE cyl = 4")
+while(!dbHasCompleted(res)){
+chunk <- dbFetch(res, n = 5)
+print(nrow(chunk))
+}
+# Envia uma query que seleciona os carros com 4 cilindros.
+# Usa dbFetch() para trazer os resultados em blocos de 5 linhas.
+# Imprime o número de linhas retornadas a cada iteração.
+```
+
+```{r}
+dbClearResult(res)
+# Libera a memória da consulta.
+```
+
+slide 14
+```{r}
+dbDisconnect(db)
+if("discoCopy.db" %in% list.files("./dados/")){
+file.remove("./dados/discoCopy.db")
+}
+# Fecha a conexão com o banco discoCopy2.db.
+# Remove o arquivo discoCopy2.db da pasta dados/.
+```
+
+slide 15
+```{r}
+airports <- read_csv("./dados/airports.csv", col_types = "cccccdd")
+airlines <- read_csv("./dados/airlines.csv", col_types = "cc")
+air <- dbConnect(SQLite(), dbname="./dados/air.db")
+dbWriteTable(air, name = "airports", airports)
+dbWriteTable(air, name = "airlines", airlines)
+dbListTables(air)
+# Lê dois arquivos CSV (airports.csv e airlines.csv).
+# Cria um novo banco chamado air.db.
+# Grava as tabelas airports e airlines dentro do banco.
+# Lista as tabelas existentes.
+```
+
+slide 16
+```{r}
+dbDisconnect(air)
+if("air.db" %in% list.files("./dados/")){
+  file.remove("./dados/air.db")
+}
+# Fecha a conexão com o banco air.db.
+# Remove o arquivo air.db.
+```
+
+slide 17
+```{r}
+db <- dbConnect(SQLite(), "./dados/disco.db") # original
+tracks <- tbl(db, "tracks") # dplyr
+tracks %>% head(3)
+# Conecta novamente ao banco original disco.db.
+#Cria um objeto tracks que representa a tabela tracks usando dbplyr.
+# Mostra as 3 primeiras linhas.
+```
+
+slide 18
+```{r}
+meanTracks <- tracks %>%
+  group_by(AlbumId) %>%
+  summarise(AvLen = mean(Milliseconds, na.rm = TRUE),
+            AvCost = mean(UnitPrice, na.rm = TRUE))
+meanTracks
+# Cria um pipeline dplyr para calcular médias de duração (Milliseconds) e preço (UnitPrice) agrupados por AlbumId.
+# meanTracks ainda não carrega os dados, é uma query preguiçosa (lazy).
+```
+
+slide 19
+```{r}
+meanTracks %>% show_query()
+# Mostra a tradução SQL que o dplyr gerou para executar a agregação.
+```
+
+slide 20
+```{r}
+mT <- meanTracks %>% collect()
+mT
+# Executa de fato a query no banco e traz os resultados para o R como um data.frame.
+```
+
+
+```{r}
+dbDisconnect(db)
+# Fecha a conexão com o banco disco.db.
+```
+

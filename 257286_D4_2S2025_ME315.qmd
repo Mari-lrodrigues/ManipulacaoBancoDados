@@ -1,0 +1,143 @@
+---
+title: "Laboratório Especial"
+author: "Marilaine Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+# Pacotes necessários
+library(readr) # leitura eficiente de CSV
+library(dplyr) # manipulação de dados (tidyverse)
+library(leaflet) # mapas interativos
+library(purrr) # programação funcional (auxiliar no chunked)
+library(lubridate) # trabalhar com datas/horas
+```
+
+```{r}
+#| include: false
+# Este chunk é de caráter auxiliar e não é necessário para a execução integral do código.
+# Carregar os arquivos opcional
+# voo <- read_csv("flights.csv.zip") # dados dos voos
+# aeroporto <- read_csv("airports.csv") # dados dos aeroportos
+```
+
+```{r}
+analisa_aeronave <- function(tail_number, arquivo_voos, arquivo_airports) {
+  # ---------------------------
+  # 1. Leitura em partes do flights.csv.zip
+  # ---------------------------
+  voos_filtrados <- list() # cria lista vazia para armazenar os voos filtrados
+
+  # Função auxiliar que será chamada para cada pedaço do arquivo
+  processa_chunk <- function(df, pos) {
+    df_filtrado <- df %>%
+      filter(TAIL_NUMBER == tail_number) # filtra apenas os voos da aeronave desejada
+    voos_filtrados[[length(voos_filtrados) + 1]] <<- df_filtrado # adiciona o pedaço filtrado na lista
+  }
+
+  # Lê o arquivo de voos em partes (chunks de 100.000 linhas por vez)
+  read_csv_chunked(
+    file = arquivo_voos, # caminho do arquivo de voos
+    callback = SideEffectChunkCallback$new(processa_chunk), # aplica função em cada pedaço
+    chunk_size = 100000 # tamanho do pedaço (100.000 linhas)
+  )
+
+  # Junta todos os pedaços filtrados em uma única tabela
+  tabela_voos <- bind_rows(voos_filtrados)
+
+  # ---------------------------
+  # 2. Ordenar voos por data/hora
+  # ---------------------------
+  tabela_voos <- tabela_voos %>%
+    mutate(
+      SCHEDULED_DEPARTURE = as.integer(SCHEDULED_DEPARTURE), # converte o horário de texto para número
+      DATA = make_date(YEAR, MONTH, DAY), # cria coluna de data (ano, mês, dia)
+      HORA = if_else(is.na(SCHEDULED_DEPARTURE), NA_character_,
+        sprintf("%04d", SCHEDULED_DEPARTURE)
+      ), # formata hora para quatro dígitos (ex: 945 -> "0945")
+      HORA = paste0(substr(HORA, 1, 2), ":", substr(HORA, 3, 4)), # transforma em formato "HH:MM"
+      HORA = hm(HORA), # converte hora em objeto de tempo
+      DATETIME = DATA + HORA # junta data e hora em uma única coluna
+    ) %>%
+    arrange(DATETIME) # ordena voos em ordem cronológica
+
+  # ---------------------------
+  # 3. Juntar com coordenadas dos aeroportos
+  # ---------------------------
+  airports <- read_csv(arquivo_airports) %>% # lê arquivo de aeroportos
+    select(IATA_CODE, LATITUDE, LONGITUDE) # seleciona apenas colunas úteis
+
+  tabela_voos <- tabela_voos %>%
+    left_join(airports, by = c("ORIGIN_AIRPORT" = "IATA_CODE")) %>% # adiciona coordenadas da origem
+    rename(LAT_ORIG = LATITUDE, LON_ORIG = LONGITUDE) %>%
+    left_join(airports, by = c("DESTINATION_AIRPORT" = "IATA_CODE")) %>% # adiciona coordenadas do destino
+    rename(LAT_DEST = LATITUDE, LON_DEST = LONGITUDE)
+
+  # ---------------------------
+  # 4. Calcular estatísticas
+  # ---------------------------
+  tabela_voos <- tabela_voos %>%
+    mutate(
+      VELOCIDADE_MEDIA = if_else(
+        AIR_TIME > 0,
+        DISTANCE / (AIR_TIME / 60), # calcula velocidade média em milhas/hora
+        NA_real_ # <-- adicionado valor para o caso falso
+      ) # <-- fechado corretamente o if_else
+    ) # <-- fechado corretamente o mutate
+
+  # ---------------------------
+  # 5. Criar o mapa com leaflet
+  # ---------------------------
+  mapa <- leaflet(tabela_voos) %>%
+    addTiles() %>% # adiciona o mapa base
+    addCircleMarkers(~LON_ORIG, ~LAT_ORIG, # adiciona marcadores de origem
+      popup = ~ paste("Origem:", ORIGIN_AIRPORT),
+      radius = 3, color = "darkblue"
+    ) %>%
+    addCircleMarkers(~LON_DEST, ~LAT_DEST, # adiciona marcadores de destino
+      popup = ~ paste("Destino:", DESTINATION_AIRPORT),
+      radius = 3, color = "red"
+    ) %>%
+    addPolylines(
+      lng = ~ c(LON_ORIG, LON_DEST), # desenha linhas entre origem e destino
+      lat = ~ c(LAT_ORIG, LAT_DEST),
+      weight = ~ pmax(1, VELOCIDADE_MEDIA / 100), # espessura proporcional à velocidade
+      color = ~ ifelse(VELOCIDADE_MEDIA > 500, "red", "lightgreen"), # cor condicional
+      opacity = 0.2,
+      label = ~ paste0(
+        ORIGIN_AIRPORT, " → ", DESTINATION_AIRPORT,
+        "<br>Data: ", DATA,
+        "<br>Distância: ", DISTANCE, " milhas",
+        "<br>Tempo de voo: ", AIR_TIME, " min",
+        "<br>Velocidade média: ", round(VELOCIDADE_MEDIA, 1), " mph"
+      )
+    )
+
+  # Retorna os resultados: tabela tratada + gráfico interativo
+  return(list(
+    tabela = tabela_voos,
+    mapa = mapa
+  ))
+}
+```
+
+```{r}
+#| warning: false
+#| message: false
+# Exemplo de uso:
+resultado <- analisa_aeronave(
+  tail_number = "N527AS",
+  arquivo_voos = "flights.csv.zip",
+  arquivo_airports = "airports.csv"
+)
+
+# Visualizar tabela
+head(resultado$tabela)
+
+# Visualizar mapa interativo
+resultado$mapa
+```

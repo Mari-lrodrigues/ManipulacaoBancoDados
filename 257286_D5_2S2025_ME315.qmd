@@ -1,0 +1,135 @@
+---
+title: "Desafio 05"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: 
+  html: default
+  pdf: default
+editor: visual
+---
+
+```{r}
+library(RSQLite)
+```
+
+```{r}
+db = dbConnect(SQLite(),"dados/disco.db")
+db
+```
+ 
+```{r}
+dbListTables(db)
+```
+ 
+```{r}
+dbListFields(db, 'albums')
+```
+ 
+```{r}
+album_db = dbGetQuery(db, 'SELECT * FROM albums')
+head(album_db)
+```
+ 
+```{r}
+dim(album_db)
+```
+
+1. Selecione as colunas trackid, name, composer e unitprice. Ordene o objeto resultante por unitprice.(Slide 10)
+```{r}
+sql = 'SELECT trackid, name, composer, unitprice FROM tracks ORDER BY unitprice'
+
+res = dbGetQuery(db, sql)
+head(res)
+```
+`Resposta:` A consulta retorna os identificadores das faixas, seus nomes, compositores e preços unitários, ordenados pelo valor de `unitprice`. As primeiras linhas exibem músicas com preço unitário de 0.99.
+
+2. Quais são as cidades de todos os clientes, ordenadas por nome de cidade? (Slide 11)
+```{r}
+sql = 'SELECT city FROM customers ORDER BY city'
+ex3a = dbGetQuery(db, sql)
+head(ex3a)
+
+dim(ex3a)
+```
+`Resposta:` Nessa questão ele pega todas as cidades dos clientes, independente se elas se repetem ou não.
+
+3. Quais são as cidades de todos os clientes, ordenadas por nome de cidade? (Slide 12)
+```{r}
+sql = 'SELECT DISTINCT city FROM customers ORDER BY city'
+ex3b = dbGetQuery(db, sql)
+head(ex3b)
+
+dim(ex3b)
+```
+`Respostas:` Nesse exercício ele filtra, e nos mostra apenas uma vez cada cidade.
+
+4. Quais são todas as músicas do álbum 1? (Slide 13)
+```{r}
+dbGetQuery(db, 'SELECT name, albumid FROM tracks WHERE albumid=1')
+```
+`Resposta:` Listamos todas as músicas pertencentes ao álbum 1. Foram retornadas 10 faixas, todas com `AlbumId = 1`.
+
+5. Limitando-se a 5 registros, após ordenação por nome, quais são os nomes, ID de álbum e ID de mídia de músicas com mídias de tipo 1 ou 2? (Slide 14)
+```{r}
+sql = paste(
+  'SELECT name, albumid, mediatypeid FROM tracks',
+  'WHERE mediatypeid IN (1, 2)',
+  'ORDER BY name LIMIT 5'
+)
+dbGetQuery(db, sql)
+```
+``Resposta:` A consulta seleciona apenas as músicas com mídias de tipo 1 ou 2, ordenadas pelo nome, e limita a 5 registros. Foram exibidos corretamente os nomes, `AlbumId` e `MediaTypeId` das 5 primeiras faixas que atendem a esse critério.
+
+6. Quais são as músicas e identificadores de faixa e álbum produzidas pelo artista que identificador 12? (Slide 15)
+```{r}
+sql = paste(
+  'SELECT trackid, name, albumid FROM tracks',
+  'WHERE albumid IN',
+  '(SELECT albumid FROM albums WHERE artistid = 12)',
+  'LIMIT 5'
+)
+dbGetQuery(db, sql)
+```
+`Resposta:`Selecionamos as músicas do artista de identificador 12 por meio de uma subconsulta que retorna os álbuns desse artista. O resultado mostra as faixas com `TrackId`, `Name` e `AlbumId`, confirmando a associação correta. Importante: usamos `=` em vez de `==`, pois em SQL o operador de igualdade é `=`.
+
+7. Quais são as faixas cujos nomes começam com qualquer caracter seguido de 'ere' e terminam com qualquer expressão? (Slide 16)
+```{r}
+sql = "SELECT trackid, name FROM tracks WHERE name GLOB '?ere*'"
+dbGetQuery(db, sql)[1:5,]
+```
+`Resposta:` Recuperamos as faixas cujos nomes seguem o padrão de começar com qualquer caractere, seguidos de "ere" e depois qualquer sequência de caracteres. O resultado mostra 5 exemplos, confirmando o uso correto do `GLOB '?ere*'`.
+
+8. Quais são as faixas cujos nomes possuem algum dígito? (Slide 17)
+```{r}
+sql = "SELECT trackid, name FROM tracks WHERE name GLOB '*[0-9]*'"
+dbGetQuery(db, sql)[1:5,]
+```
+`Resposta:` Retornamos as faixas cujos nomes possuem algum dígito (0–9). Foram listadas as 5 primeiras músicas que apresentam números no título, confirmando o funcionamento do padrão `GLOB '*[0-9]*'`.
+
+9. Quantas faixas por disco? (Slide 18)
+```{r}
+sql = 'SELECT albumid, COUNT(trackid) FROM tracks GROUP BY albumid'
+dbGetQuery(db, sql)[1:5,]
+```
+`Resposta:` Contamos quantas faixas existem em cada álbum. O resultado mostra o `AlbumId` junto da quantidade de músicas correspondentes.
+
+10. Quantas faixas por disco para o album 1? (Slide 19)
+```{r}
+sql = paste(
+  'SELECT albumid, COUNT(trackid)',
+  'FROM tracks GROUP BY albumid',
+  'HAVING albumid=1'
+)
+dbGetQuery(db, sql)
+```
+`Resposta:` Aplicando a mesma lógica da questão anterior, mas restringindo ao álbum 1, obtivemos que ele possui exatamente 10 faixas.
+
+11. Quais são os nomes de cada faixa com os respectivos títulos dos álbums? (Slide 21)
+```{r}
+sql = paste(
+  'SELECT trackid, name, title FROM tracks',
+  'INNER JOIN albums ON albums.albumid=tracks.albumid'
+)
+dbGetQuery(db, sql)[1:5,]
+```
+`Resposta:` A consulta utiliza `INNER JOIN` entre as tabelas `tracks` e `albums` para retornar os nomes das faixas junto aos títulos dos respectivos álbuns. O resultado confirma a relação correta entre faixas e álbuns.
+ 

@@ -1,0 +1,177 @@
+---
+title: "Desafio 08"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+Esse relatório foi gerado em: `r format(Sys.time(), "%d/%m/%Y %H:%M")`
+
+```{r}
+library(DBI)
+library(RSQLite)
+```
+
+1. Baixe o arquivo uwmadison.sqlite3. Conecte-se a ele usando o pacote RSQLite, armazenando a conexão em uma variável conn.
+```{r}
+# conexão ao banco, como está no mesmo diretório do .qmd
+conn <- dbConnect(SQLite(), dbname = "database.sqlite3")
+
+# listar as tabelas
+dbListTables(conn)
+```
+2. Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (subjects.abbreviation='STAT');
+
+```{r}
+sql <- "
+SELECT DISTINCT i.id, i.name
+FROM instructors i
+JOIN teachings t ON i.id = t.instructor_id
+JOIN sections s ON t.section_uuid = s.uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects subj ON sm.subject_code = subj.code
+WHERE subj.abbreviation = 'STAT'
+"
+professores_stat <- dbGetQuery(conn, sql)
+n_professores <- nrow(professores_stat)
+```
+
+```{r}
+head(professores_stat)
+```
+
+```{r}
+n_professores
+```
+
+`Resposta Questão 2:` Alguns professores que lecionam disciplinas de estatística são `r paste(head(professores_stat$name, 5), collapse = ", ")`, entre outros. No total, temos `r n_professores` professores.
+
+
+3. O GPA americano é definido numa escala de 0 a 4, em que A = 4, AB = 3.5, B = 3, BC = 2.5, C = 2, D = 1 e F = 0. Determinando a nota média de cada oferecimento pela ponderação da quantidade de alunos em cada extrato com os valores numéricos de cada conceito, indique (no que se referente a disciplinas no assunto de estatística):
+```{r}
+sql <- "
+SELECT gd.course_offering_uuid,
+       SUM(gd.a_count*4 +
+           gd.ab_count*3.5 +
+           gd.b_count*3 +
+           gd.bc_count*2.5 +
+           gd.c_count*2 +
+           gd.d_count*1 +
+           gd.f_count*0
+       ) * 1.0 / 
+       SUM(gd.a_count + gd.ab_count + gd.b_count + gd.bc_count +
+           gd.c_count + gd.d_count + gd.f_count) AS gpa_medio
+FROM grade_distributions gd
+GROUP BY gd.course_offering_uuid
+"
+gpa_por_oferecimento <- dbGetQuery(conn, sql)
+```
+
+```{r}
+sql <- "
+SELECT i.name,
+       AVG(
+           (gd.a_count*4 +
+            gd.ab_count*3.5 +
+            gd.b_count*3 +
+            gd.bc_count*2.5 +
+            gd.c_count*2 +
+            gd.d_count*1 +
+            gd.f_count*0.0) * 1.0 /
+           (gd.a_count + gd.ab_count + gd.b_count + gd.bc_count +
+            gd.c_count + gd.d_count + gd.f_count)
+       ) AS gpa_medio
+FROM grade_distributions gd
+JOIN course_offerings co ON gd.course_offering_uuid = co.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects subj ON sm.subject_code = subj.code
+JOIN sections s ON gd.course_offering_uuid = s.course_offering_uuid
+JOIN teachings t ON s.uuid = t.section_uuid
+JOIN instructors i ON t.instructor_id = i.id
+WHERE subj.abbreviation = 'STAT'
+GROUP BY i.name
+ORDER BY gpa_medio
+"
+professores_dificeis_faceis <- dbGetQuery(conn, sql)
+```
+
+```{r}
+sql <- "
+SELECT c.name AS disciplina,
+       AVG(
+           (gd.a_count*4 +
+            gd.ab_count*3.5 +
+            gd.b_count*3 +
+            gd.bc_count*2.5 +
+            gd.c_count*2 +
+            gd.d_count*1 +
+            gd.f_count*0.0) * 1.0 /
+           (gd.a_count + gd.ab_count + gd.b_count + gd.bc_count +
+            gd.c_count + gd.d_count + gd.f_count)
+       ) AS gpa_medio
+FROM grade_distributions gd
+JOIN course_offerings co ON gd.course_offering_uuid = co.uuid
+JOIN courses c ON co.course_uuid = c.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects subj ON sm.subject_code = subj.code
+WHERE subj.abbreviation = 'STAT'
+  AND (gd.a_count + gd.ab_count + gd.b_count + gd.bc_count +
+       gd.c_count + gd.d_count + gd.f_count) > 0
+GROUP BY c.name
+ORDER BY gpa_medio
+"
+disciplinas_dificeis_faceis <- dbGetQuery(conn, sql)
+```
+
+```{r}
+head(professores_dificeis_faceis)   # mostra os professores mais difíceis
+tail(professores_dificeis_faceis)   # mostra os professores mais fáceis
+```
+
+```{r}
+# remover NAs
+professores_clean <- na.omit(professores_dificeis_faceis)
+
+# professor mais difícil
+professor_mais_dificil <- professores_clean$name[which.min(professores_clean$gpa_medio)]
+
+# professores mais fáceis (todos que atingiram o valor máximo)
+max_gpa <- max(professores_clean$gpa_medio)
+professores_mais_faceis <- professores_clean$name[professores_clean$gpa_medio == max_gpa]
+```
+
+a. Quem é o professor mais difícil?
+ - `Resposta:`O professor mais difícil é `r professor_mais_dificil`.  
+b. Quem é o professor mais fácil?
+ - `Resposta:`Os professores mais fáceis são `r paste(professores_mais_faceis, collapse = ", ")`.  
+
+```{r}
+head(disciplinas_dificeis_faceis)   # disciplinas mais difíceis
+tail(disciplinas_dificeis_faceis)   # disciplinas mais fáceis
+```
+
+
+```{r}
+# disciplina mais difícil
+min_gpa <- min(disciplinas_dificeis_faceis$gpa_medio, na.rm = TRUE)
+disciplinas_mais_dificeis <- disciplinas_dificeis_faceis$disciplina[disciplinas_dificeis_faceis$gpa_medio == min_gpa]
+
+# disciplina mais fácil
+max_gpa <- max(disciplinas_dificeis_faceis$gpa_medio, na.rm = TRUE)
+disciplinas_mais_faceis <- disciplinas_dificeis_faceis$disciplina[disciplinas_dificeis_faceis$gpa_medio == max_gpa]
+```
+
+c. Qual é a disciplina mais difícil?
+ - `Resposta:` A disciplina mais difícil é `r paste(disciplinas_mais_dificeis, collapse = ", ")`.
+ 
+d. Qual é a disciplina mais fácil?
+ - `Resposta:` A disciplina mais fácil é `r paste(disciplinas_mais_faceis, collapse = ", ")`.
+
+
+4. Desconecte do banco de dados.
+```{r}
+dbDisconnect(conn)
+```
+
+

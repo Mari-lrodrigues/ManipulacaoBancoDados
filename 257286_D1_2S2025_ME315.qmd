@@ -1,0 +1,42 @@
+---
+title: "Desafio 01"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+Qual dessas três formas de carregar os dados é mais rápida? (calcule o tempo exato que demorou cada método em carregar os dados no seu computador)
+
+```{r}
+library(reticulate)
+library(readr)
+```
+
+-   `read.csv()` do pacote `base` do **R**
+```{r}
+ini <- Sys.time()
+dados <- read.csv(unz("flights.csv.zip", "flights.csv"))
+fim <- Sys.time()
+fim - ini
+```
+
+-   `read_csv()` do pacote `readr` do **R**
+```{r}
+#| message: FALSE
+#| warning: FALSE
+ini <- Sys.time()
+dados <- read_csv("flights.csv.zip")
+fim <- Sys.time()
+fim - ini
+```
+
+
+-   `read_csv()` do `pandas` no **Python**
+```{python}
+import time
+import pandas as pd
+ini = time.time()
+dados = pd.read_csv("flights.csv.zip", compression="zip", header=0, sep=",", low_memory=False)
+fim = time.time()
+fim - ini
+```

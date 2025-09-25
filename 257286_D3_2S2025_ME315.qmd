@@ -1,0 +1,78 @@
+---
+title: "Desafio 03"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+Neste desafio trabalhamos com dois formatos de arquivos diferentes:
+
+ - **JSON (`car_sales_data.json`)**: formato baseado em texto, muito usado para troca de dados via APIs e aplicações web. 
+ - **Parquet (`Sales_table.parquet`)**: formato binário e colunar, otimizado para armazenamento e análise de grandes conjuntos de dados.
+ 
+ Com o intuito de carregalos no software RStudio e transformá-los em data frames (ou *tibbles*).
+
+```{r}
+#| echo: TRUE
+#| message: FALSE
+#| warning: FALSE
+# Pacotes necessários
+library(tidyverse)   # Para manipulação de dados e tibbles
+library(jsonlite)    # Para ler JSON
+library(arrow)       # Para ler Parquet
+```
+
+
+O arquivo JSON contém informações estruturadas em formato de texto. Ele é formado por pares "chave: valor" e é muito utilizado para transmissão de dados em aplicações web. No caso deste desafio, o arquivo `car_sales_data.json` armazena dados sobre vendas de carros. Cada entrada inclui atributos como: - Fabricante (Manufacturer) - Modelo (Model) - Tamanho do motor (Engine size) - Tipo de combustível (Fuel type) - Ano de fabricação (Year of manufacture) - Quilometragem (Mileage) - Preço (Price).
+
+```{r}
+# Caminho do JSON
+json_path <- "car_sales_data.json"
+
+# Carregar JSON e converter em tibble
+car_sales <- fromJSON(json_path) %>% as_tibble()
+
+# Visualizar as primeiras linhas
+head(car_sales)
+```
+
+
+O arquivo Parquet é um formato binário e colunar, desenvolvido para otimizar o armazenamento e a leitura de grandes volumes de dados. Diferente do JSON e do CSV (baseados em texto), o Parquet organiza os dados em colunas, o que permite: - Compressão mais eficiente (arquivos menores) - Leituras mais rápidas de colunas específicas - Melhor desempenho em análises de dados. Esse arquivo pode conter dados tabulares, como uma tabela de vendas, e é amplamente usado em ambientes de Big Data.
+
+```{r}
+# Caminho do Parquet
+parquet_path <- "Sales_table.parquet"
+
+# Carregar Parquet e converter em tibble
+sales_table <- read_parquet(parquet_path) %>% as_tibble()
+
+# Visualizar as primeiras linhas
+head(sales_table)
+```
+
+
+Conclusão
+O JSON é textual e estruturado, ideal para troca de dados entre sistemas e APIs. - O Parquet é binário e colunar, otimizado para análise e armazenamento de grandes datasets. - Ambos os arquivos podem ser carregados no R como data frames (tibbles) para posterior análise. Assim, cada formato tem seu uso ideal: JSON para interoperabilidade e Parquet para eficiência.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
