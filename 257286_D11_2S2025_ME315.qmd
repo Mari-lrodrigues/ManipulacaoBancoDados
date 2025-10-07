@@ -1,0 +1,138 @@
+---
+title: "Desafio 11"
+author: "Marilaine Lima Rodrigues, RA: 257286"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+format(Sys.time(), "%d/%m/%Y %H:%M:%S")
+```
+
+```{python}
+import polars as pl
+```
+
+1. Utilizando o arquivo renda_adulta.csv e sabendo que ele não possui cabeçalho, faça a importação do banco de dados utilizando os nomes das colunas conforme apresentado acima e na sequência ali indicada. No momento da importação do arquivo, você deve, também, indicar os tipos de cada uma das colunas. Utilize o fato de que o símbolo ? representa valores faltantes.
+```{python}
+# nomes das colunas
+colunas = [
+    "age", "workclass", "fnlwgt", "education", "education-num",
+    "marital-status", "occupation", "relationship", "race", "sex",
+    "capital-gain", "capital-loss", "hours-per-week", "native-country", "income"
+]
+
+# tipos de dados
+dtypes = {
+    "age": pl.Int64,
+    "workclass": pl.Categorical,
+    "fnlwgt": pl.Int64,
+    "education": pl.Categorical,
+    "education-num": pl.Int64,
+    "marital-status": pl.Categorical,
+    "occupation": pl.Categorical,
+    "relationship": pl.Categorical,
+    "race": pl.Categorical,
+    "sex": pl.Categorical,
+    "capital-gain": pl.Int64,
+    "capital-loss": pl.Int64,
+    "hours-per-week": pl.Int64,
+    "native-country": pl.Categorical,
+    "income": pl.Categorical
+}
+
+# importação do arquivo
+df = pl.read_csv(
+    r"C:\Users\lima_\OneDrive\Área de Trabalho\ME315D\renda_adulta.csv.gz",
+    has_header=False,       # arquivo não tem cabeçalho
+    new_columns=colunas,    # define nomes
+    dtypes=dtypes,          # define tipos
+    null_values="?"         # trata "?" como valor faltante
+)
+```
+
+2.Apresente os tipos de cada uma das coluna. 
+```{python}
+pl.DataFrame({
+    "Coluna": df.columns,
+    "Tipo": [str(t) for t in df.dtypes]
+})
+```
+3. Apresente as dimensões da tabela de dados.
+```{python}
+df.shape
+```
+
+4.Quantas pessoas recebem acima de $50.000 e quantas pessoas recebem abaixo deste limiar?
+```{python}
+df["income"].value_counts()
+```
+
+5. Crie um objeto chamado renda_longo, no qual você transforma as colunas capital-gain e capital-loss (formato wide) para formato longo. Os valores destas variáveis devem ser armazenados numa nova coluna chamada Valor e os tipos de valores (gain e loss) devem ser armazenados numa coluna chamada tipo.
+```{python}
+renda_longo = df.melt(
+    id_vars=[col for col in df.columns if col not in ["capital-gain", "capital-loss"]],
+    value_vars=["capital-gain", "capital-loss"],
+    variable_name="tipo",
+    value_name="Valor"
+)
+
+renda_longo.head()
+```
+
+6. Quais são as médias de horas trabalhadas por classe salarial?
+```{python}
+df.group_by("income").agg(
+    pl.col("hours-per-week").mean().alias("media_horas")
+)
+```
+
+7. Se cada linha representa uma pessoa, quantas pessoas foram amostradas em cada profissão?
+```{python}
+df.group_by("occupation").agg(
+    pl.count().alias("quantidade")
+).sort("quantidade", descending=True)
+```
+
+8. Crie um gráfico de barras que apresente o número médio de horas trabalhadas semanalmente em função do nível salarial.
+```{python}
+import matplotlib.pyplot as plt
+
+media_horas = (
+    df.group_by("income")
+      .agg(pl.col("hours-per-week").mean().alias("media_horas"))
+      .sort("income")
+)
+
+plt.bar(media_horas["income"], media_horas["media_horas"], color=["#88B257", "#4A701C"])
+plt.xlabel("Classe Salarial")
+plt.ylabel("Média de Horas Semanais")
+plt.title("Média de Horas Trabalhadas por Classe Salarial")
+plt.show()
+```
+
+9. Desafio: existe alguma evidência de discriminação salarial entre gêneros biológicos?
+```{python}
+prop_renda = (
+    df.group_by(["sex", "income"])
+      .agg(pl.count().alias("n"))
+      .join(
+          df.group_by("sex").agg(pl.count().alias("total")),
+          on="sex"
+      )
+      .with_columns(
+          (pl.col("n") / pl.col("total")).alias("proporcao")
+      )
+      .sort(["sex", "income"])
+)
+
+prop_renda
+```
+
+
+
+
+
+
+
